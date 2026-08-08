@@ -2,48 +2,48 @@ name: PDF Novel to EPUB - Layout Only CPU
 
 on:
 workflow_dispatch:
-inputs:
-pdf_url:
-description: "Direct URL PDF"
-required: true
-type: string
+    inputs:
+        pdf_url:
+            description: "Direct URL PDF"
+            required: true
+            type: string
 
-book_title:
-    description: "Judul buku"
-    required: true
-    type: string
+        book_title:
+            description: "Judul buku"
+            required: true
+            type: string
 
-author:
-    description: "Nama penulis"
-    required: false
-    type: string
-    default: ""
+        author:
+            description: "Nama penulis"
+            required: false
+            type: string
+            default: ""
 
-language:
-    description: "Bahasa EPUB"
-    required: true
-    type: string
-    default: "id"
+        language:
+            description: "Bahasa EPUB"
+            required: true
+            type: string
+            default: "id"
 
-render_dpi:
-    description: "Resolusi render untuk analisis layout"
-    required: true
-    type: choice
-    options:
-      - "120"
-      - "144"
-      - "160"
-    default: "144"
+        render_dpi:
+            description: "Resolusi render untuk analisis layout"
+            required: true
+            type: choice
+            options:
+                - "120"
+                - "144"
+                - "160"
+            default: "144"
 
-workers:
-    description: "Worker Gemini"
-    required: true
-    type: choice
-    options:
-      - "1"
-      - "2"
-      - "3"
-      - "4"
+        workers:
+            description: "Worker Gemini"
+            required: true
+            type: choice
+            options:
+                - "1"
+                - "2"
+                - "3"
+                - "4"
     default: "2"
 
 jobs:
