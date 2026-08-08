@@ -8,24 +8,24 @@ description: "Direct URL PDF"
 required: true
 type: string
 
-  book_title:
+book_title:
     description: "Judul buku"
     required: true
     type: string
 
-  author:
+author:
     description: "Nama penulis"
     required: false
     type: string
     default: ""
 
-  language:
+language:
     description: "Bahasa EPUB"
     required: true
     type: string
     default: "id"
 
-  render_dpi:
+render_dpi:
     description: "Resolusi render untuk analisis layout"
     required: true
     type: choice
@@ -35,7 +35,7 @@ type: string
       - "160"
     default: "144"
 
-  workers:
+workers:
     description: "Worker Gemini"
     required: true
     type: choice
