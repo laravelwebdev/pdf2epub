@@ -224,10 +224,7 @@ jobs:
           image_files = sorted([f for f in os.listdir(images_dir) if f.lower().endswith((".png", ".jpg", ".jpeg", ".gif"))])
           cover_image = image_files[0] if image_files else ""
 
-          # Collect markdown chapter files
-          md_files = sorted([os.path.basename(f) for f in glob.glob(os.path.join(target_dir, "*.md"))])
-          chapters = [{"markdown": f, "css": ""} for f in md_files]
-
+          # Initial description.json metadata
           desc = {
               "metadata": {
                   "dc:title": title,
@@ -237,15 +234,14 @@ jobs:
                   "dc:date": "2026-08-09"
               },
               "cover_image": cover_image,
-              "default_css": css_files,
-              "chapters": chapters
+              "default_css": css_files
           }
 
           desc_path = os.path.join(target_dir, "description.json")
           with open(desc_path, "w", encoding="utf-8") as f:
               json.dump(desc, f, indent=4)
 
-          print(f"Generated description.json:\n{json.dumps(desc, indent=2)}")
+          print(f"Generated initial description.json:\n{json.dumps(desc, indent=2)}")
 
           epub_output = os.path.join("output", "book.epub")
           cmd = ["python", "mark2epub.py", target_dir, epub_output]
