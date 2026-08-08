@@ -1,0 +1,294 @@
+name: Convert PDF to Markdown - CPU
+
+on:
+  workflow_dispatch:
+    inputs:
+      pdf_url:
+        description: "URL Link of the PDF file to convert (optional)"
+        required: false
+        type: string
+
+      title:
+        description: "Book Title (Judul Buku)"
+        required: false
+        default: "Document"
+        type: string
+
+      author:
+        description: "Author (Pengarang)"
+        required: false
+        default: "Unknown"
+        type: string
+
+      output_format:
+        description: "Output format"
+        required: false
+        default: "markdown"
+        type: choice
+        options:
+          - markdown
+          - html
+
+jobs:
+  convert-pdf:
+    name: Convert PDF on CPU
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 60
+
+    steps:
+      # ---------------------------------------------------------
+      # Checkout
+      # ---------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ---------------------------------------------------------
+      # System dependencies
+      # ---------------------------------------------------------
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+
+          sudo apt-get install -y \
+            curl \
+            wget \
+            file \
+            git \
+            libpango-1.0-0 \
+            libpangoft2-1.0-0 \
+            libharfbuzz0b \
+            libgdk-pixbuf-2.0-0 \
+            libcairo2 \
+            libffi-dev \
+            shared-mime-info
+
+      # ---------------------------------------------------------
+      # Python
+      # ---------------------------------------------------------
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # ---------------------------------------------------------
+      # Install uv
+      # ---------------------------------------------------------
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      # ---------------------------------------------------------
+      # Install Marker & Dependencies
+      # ---------------------------------------------------------
+      - name: Install Marker PDF and mark2epub requirements
+        run: |
+          uv pip install --system "marker-pdf[full]" markdown
+
+      # ---------------------------------------------------------
+      # Create directories
+      # ---------------------------------------------------------
+      - name: Prepare directories
+        run: |
+          mkdir -p input
+          mkdir -p output
+
+      # ---------------------------------------------------------
+      # Prepare PDF (Download or use input.pdf)
+      # ---------------------------------------------------------
+      - name: Prepare PDF input
+        env:
+          PDF_URL: ${{ inputs.pdf_url }}
+        run: |
+          if [ -n "${PDF_URL}" ]; then
+            echo "Downloading PDF from URL: ${PDF_URL}..."
+            curl \
+              --fail \
+              --location \
+              --show-error \
+              --retry 5 \
+              --retry-delay 5 \
+              --connect-timeout 30 \
+              --max-time 600 \
+              "${PDF_URL}" \
+              --output input/document.pdf
+          else
+            echo "No PDF URL provided. Looking for input.pdf in repository..."
+            if [ -f "input.pdf" ]; then
+              echo "Using input.pdf from repository."
+              cp input.pdf input/document.pdf
+            else
+              echo "ERROR: No PDF URL provided and input.pdf not found in repository."
+              exit 1
+            fi
+          fi
+
+          if [ ! -f input/document.pdf ]; then
+            echo "ERROR: PDF file was not created."
+            exit 1
+          fi
+
+          if [ ! -s input/document.pdf ]; then
+            echo "ERROR: Input PDF is empty."
+            exit 1
+          fi
+
+          echo "Input PDF:"
+          ls -lh input/document.pdf
+
+          echo "File information:"
+          file input/document.pdf
+
+      # ---------------------------------------------------------
+      # Check PDF
+      # ---------------------------------------------------------
+      - name: Validate PDF
+        run: |
+          if ! file input/document.pdf | grep -qi "PDF"; then
+            echo "ERROR: Input file does not appear to be a PDF."
+            exit 1
+          fi
+
+          echo "PDF validation successful."
+
+      # ---------------------------------------------------------
+      # Convert PDF
+      # ---------------------------------------------------------
+      - name: Convert PDF to Markdown
+        env:
+          TORCH_DEVICE: cpu
+          CUDA_VISIBLE_DEVICES: ""
+          HF_HUB_DISABLE_TELEMETRY: "1"
+        run: |
+          echo "======================================"
+          echo "CPU-only PDF conversion"
+          echo "======================================"
+
+          marker_single \
+            input/document.pdf \
+            --output_dir output \
+            --output_format markdown \
+            --disable_ocr
+
+          echo "======================================"
+          echo "Conversion completed"
+          echo "======================================"
+
+      # ---------------------------------------------------------
+      # Convert Markdown to EPUB using local mark2epub.py
+      # ---------------------------------------------------------
+      - name: Convert Markdown to EPUB
+        env:
+          BOOK_TITLE: ${{ inputs.title }}
+          BOOK_AUTHOR: ${{ inputs.author }}
+        run: |
+          echo "Converting Markdown to EPUB using local mark2epub.py..."
+          python - << 'EOF'
+          import os
+          import json
+          import glob
+          import shutil
+          import subprocess
+          import sys
+
+          title = os.getenv("BOOK_TITLE", "").strip() or "Document"
+          author = os.getenv("BOOK_AUTHOR", "").strip() or "Unknown"
+
+          md_dirs = [d for d in glob.glob("output/*") if os.path.isdir(d)]
+          target_dir = md_dirs[0] if md_dirs else "output"
+
+          images_dir = os.path.join(target_dir, "images")
+          css_dir = os.path.join(target_dir, "css")
+          os.makedirs(images_dir, exist_ok=True)
+          os.makedirs(css_dir, exist_ok=True)
+
+          # Copy CSS files from repo's css/ directory into target_dir/css/
+          repo_css_dir = "css"
+          if os.path.exists(repo_css_dir):
+              for f in os.listdir(repo_css_dir):
+                  if f.endswith(".css"):
+                      shutil.copy(os.path.join(repo_css_dir, f), os.path.join(css_dir, f))
+
+          css_files = sorted([f for f in os.listdir(css_dir) if f.endswith(".css")])
+
+          # Collect images produced by marker-pdf into target_dir/images/
+          for root, dirs, files in os.walk(target_dir):
+              if os.path.abspath(root) == os.path.abspath(images_dir):
+                  continue
+              for f in files:
+                  if f.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")):
+                      src_path = os.path.join(root, f)
+                      dest_path = os.path.join(images_dir, f)
+                      if not os.path.exists(dest_path):
+                          shutil.move(src_path, dest_path)
+
+          image_files = sorted([f for f in os.listdir(images_dir) if f.lower().endswith((".png", ".jpg", ".jpeg", ".gif"))])
+          cover_image = image_files[0] if image_files else ""
+
+          # Collect markdown chapter files
+          md_files = sorted([os.path.basename(f) for f in glob.glob(os.path.join(target_dir, "*.md"))])
+          chapters = [{"markdown": f, "css": ""} for f in md_files]
+
+          desc = {
+              "metadata": {
+                  "dc:title": title,
+                  "dc:creator": author,
+                  "dc:language": "en-US",
+                  "dc:identifier": "document-1",
+                  "dc:date": "2026-08-09"
+              },
+              "cover_image": cover_image,
+              "default_css": css_files,
+              "chapters": chapters
+          }
+
+          desc_path = os.path.join(target_dir, "description.json")
+          with open(desc_path, "w", encoding="utf-8") as f:
+              json.dump(desc, f, indent=4)
+
+          print(f"Generated description.json:\n{json.dumps(desc, indent=2)}")
+
+          epub_output = os.path.join("output", "book.epub")
+          cmd = ["python", "mark2epub.py", target_dir, epub_output]
+          print(f"Running command: {' '.join(cmd)}")
+          res = subprocess.run(cmd)
+          if res.returncode != 0:
+              print(f"ERROR: mark2epub conversion failed with code {res.returncode}")
+              sys.exit(res.returncode)
+
+          print("EPUB creation successful:", epub_output)
+          EOF
+
+      # ---------------------------------------------------------
+      # Show generated files
+      # ---------------------------------------------------------
+      - name: Inspect output
+        run: |
+          echo "Generated files:"
+          find output -type f -printf '%p\n'
+
+          echo
+          echo "Output sizes:"
+          du -ah output | sort -h
+
+      # ---------------------------------------------------------
+      # Check that output exists
+      # ---------------------------------------------------------
+      - name: Verify output
+        run: |
+          if [ -z "$(find output -type f -print -quit)" ]; then
+            echo "ERROR: No output files were generated."
+            exit 1
+          fi
+
+          echo "Output verification successful."
+
+      # ---------------------------------------------------------
+      # Upload result
+      # ---------------------------------------------------------
+      - name: Upload converted output
+        uses: actions/upload-artifact@v4
+        with:
+          name: converted-pdf-output
+          path: output/
+          if-no-files-found: error
+          retention-days: 7
