@@ -306,6 +306,20 @@ jobs:
                           shutil.copy(src, os.path.join("output/images", f))
               shutil.rmtree(sdir)
 
+          # Render PDF Page 1 as cover image (cover.png)
+          try:
+              import fitz
+              pdf_cover_doc = fitz.open(pdf_path)
+              if len(pdf_cover_doc) > 0:
+                  os.makedirs("output/images", exist_ok=True)
+                  cover_file = "output/images/cover.png"
+                  pix = pdf_cover_doc[0].get_pixmap(dpi=150)
+                  pix.save(cover_file)
+                  print("Rendered PDF page 1 cover image to", cover_file)
+              pdf_cover_doc.close()
+          except Exception as e_cov:
+              print(f"Warning: Could not render page 1 cover image: {e_cov}")
+
           print("======================================")
           print("Conversion completed")
           print("======================================")
@@ -361,7 +375,7 @@ jobs:
                       if not os.path.exists(dest_path):
                           shutil.move(src_path, dest_path)
 
-          # Update markdown image links to use images/ folder
+          # Update markdown image links to use images/ folder and normalize chapter title headings to H1 (# Title)
           def fix_image_link(match):
               alt = match.group(1)
               img_name = os.path.basename(match.group(2))
@@ -370,18 +384,41 @@ jobs:
           for md_path in glob.glob(os.path.join(target_dir, "*.md")):
               with open(md_path, "r", encoding="utf-8") as f_md:
                   content = f_md.read()
+              
               new_content = re.sub(
                   r'!\[(.*?)\]\((?:\.?\/)?(?:images\/)?([^\s\)\"]+\.(?:png|jpg|jpeg|gif|webp|svg))\)',
                   fix_image_link,
                   content,
                   flags=re.IGNORECASE
               )
-              if new_content != content:
-                  with open(md_path, "w", encoding="utf-8") as f_md:
-                      f_md.write(new_content)
+              
+              # Normalize first heading in chapter file to H1 (# Title)
+              lines = new_content.splitlines()
+              first_h_idx = -1
+              first_h_match = None
+              for idx_l, line in enumerate(lines):
+                  m = re.match(r'^(#{1,6})\s+(.+)$', line.strip())
+                  if m:
+                      first_h_idx = idx_l
+                      first_h_match = m
+                      break
 
-          image_files = sorted([f for f in os.listdir(images_dir) if f.lower().endswith((".png", ".jpg", ".jpeg", ".gif"))])
-          cover_image = image_files[0] if image_files else ""
+              if first_h_idx != -1:
+                  raw_t = first_h_match.group(2).strip()
+                  lines[first_h_idx] = f"# {raw_t}"
+              else:
+                  base_name = os.path.basename(md_path).rsplit(".", 1)[0]
+                  lines.insert(0, f"# {base_name.replace('_', ' ').title()}\n")
+
+              norm_content = "\n".join(lines) + "\n"
+              with open(md_path, "w", encoding="utf-8") as f_md:
+                  f_md.write(norm_content)
+
+          if os.path.exists(os.path.join(images_dir, "cover.png")):
+              cover_image = "cover.png"
+          else:
+              image_files = sorted([f for f in os.listdir(images_dir) if f.lower().endswith((".png", ".jpg", ".jpeg", ".gif"))])
+              cover_image = image_files[0] if image_files else ""
 
           # Initial description.json metadata
           desc = {

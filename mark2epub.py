@@ -287,18 +287,7 @@ def get_TOC_XML(default_css_filenames, chapters_info, work_dir="."):
         md_filename = chapter["markdown"]
         chapter_title = chapter.get("title") or extract_title_from_md(os.path.join(work_dir, md_filename))
         xhtml_filename = f"s{i:05d}-{md_filename.split('.')[0]}.xhtml"
-
-        toc_items = extract_toc_items_from_md(os.path.join(work_dir, md_filename))
-        sub_items = [item for item in toc_items if item[0] > 1]
-
-        toc_xhtml += f"""  <li><a href="{xhtml_filename}">{xml_escape(chapter_title)}</a>"""
-        if sub_items:
-            toc_xhtml += """\n    <ol>\n"""
-            for sub_level, sub_title, sub_slug in sub_items:
-                href = f"{xhtml_filename}#{sub_slug}"
-                toc_xhtml += f"""      <li><a href="{href}">{xml_escape(sub_title)}</a></li>\n"""
-            toc_xhtml += """    </ol>\n  """
-        toc_xhtml += """</li>\n"""
+        toc_xhtml += f"""  <li><a href="{xhtml_filename}">{xml_escape(chapter_title)}</a></li>\n"""
 
     toc_xhtml += """</ol>\n</nav>\n</body>\n</html>"""
     return toc_xhtml
@@ -310,7 +299,7 @@ def get_TOCNCX_XML(chapters_info, work_dir=".", book_title="Document"):
     toc_ncx += """<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" xml:lang="en" version="2005-1">\n"""
     toc_ncx += """<head>\n"""
     toc_ncx += """  <meta name="dtb:uid" content="document-1"/>\n"""
-    toc_ncx += """  <meta name="dtb:depth" content="2"/>\n"""
+    toc_ncx += """  <meta name="dtb:depth" content="1"/>\n"""
     toc_ncx += """  <meta name="dtb:totalPageCount" content="0"/>\n"""
     toc_ncx += """  <meta name="dtb:maxPageNumber" content="0"/>\n"""
     toc_ncx += """</head>\n"""
@@ -327,17 +316,6 @@ def get_TOCNCX_XML(chapters_info, work_dir=".", book_title="Document"):
         play_order += 1
         toc_ncx += f"""    <navLabel><text>{xml_escape(chapter_title)}</text></navLabel>\n"""
         toc_ncx += f"""    <content src="{xhtml_filename}"/>\n"""
-
-        toc_items = extract_toc_items_from_md(os.path.join(work_dir, md_filename))
-        sub_items = [item for item in toc_items if item[0] > 1]
-        for sub_idx, (sub_level, sub_title, sub_slug) in enumerate(sub_items):
-            sub_href = f"{xhtml_filename}#{sub_slug}"
-            toc_ncx += f"""    <navPoint id="navpoint-{i}-{sub_idx}" playOrder="{play_order}">\n"""
-            play_order += 1
-            toc_ncx += f"""      <navLabel><text>{xml_escape(sub_title)}</text></navLabel>\n"""
-            toc_ncx += f"""      <content src="{sub_href}"/>\n"""
-            toc_ncx += f"""    </navPoint>\n"""
-
         toc_ncx += """  </navPoint>\n"""
 
     toc_ncx += """</navMap>\n</ncx>"""
