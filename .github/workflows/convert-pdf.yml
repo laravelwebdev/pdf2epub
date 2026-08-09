@@ -20,6 +20,12 @@ on:
         default: "Unknown"
         type: string
 
+      chapter_pages:
+        description: "Halaman PDF awal chapter (dipisahkan koma, misal: 4,15,18)"
+        required: false
+        default: ""
+        type: string
+
       output_format:
         description: "Output format"
         required: false
@@ -167,7 +173,8 @@ jobs:
             input/document.pdf \
             --output_dir output \
             --output_format markdown \
-            --disable_ocr
+            --disable_ocr \
+            --paginate_output
 
           echo "======================================"
           echo "Conversion completed"
@@ -180,6 +187,7 @@ jobs:
         env:
           BOOK_TITLE: ${{ inputs.title }}
           BOOK_AUTHOR: ${{ inputs.author }}
+          CHAPTER_PAGES: ${{ inputs.chapter_pages }}
         run: |
           echo "Converting Markdown to EPUB using local mark2epub.py..."
           python - << 'EOF'
@@ -189,9 +197,11 @@ jobs:
           import shutil
           import subprocess
           import sys
+          import re
 
           title = os.getenv("BOOK_TITLE", "").strip() or "Document"
           author = os.getenv("BOOK_AUTHOR", "").strip() or "Unknown"
+          chapter_pages = os.getenv("CHAPTER_PAGES", "").strip()
 
           md_dirs = [d for d in glob.glob("output/*") if os.path.isdir(d)]
           target_dir = md_dirs[0] if md_dirs else "output"
@@ -221,6 +231,15 @@ jobs:
                       if not os.path.exists(dest_path):
                           shutil.move(src_path, dest_path)
 
+          # Update markdown image links to use images/ folder
+          for md_path in glob.glob(os.path.join(target_dir, "*.md")):
+              with open(md_path, "r", encoding="utf-8") as f_md:
+                  content = f_md.read()
+              new_content = re.sub(r'!\[\]\((\.?\/)?([^\/]+\.(?:png|jpg|jpeg|gif|webp|svg))\)', r'![](images/\2)', content)
+              if new_content != content:
+                  with open(md_path, "w", encoding="utf-8") as f_md:
+                      f_md.write(new_content)
+
           image_files = sorted([f for f in os.listdir(images_dir) if f.lower().endswith((".png", ".jpg", ".jpeg", ".gif"))])
           cover_image = image_files[0] if image_files else ""
 
@@ -236,6 +255,9 @@ jobs:
               "cover_image": cover_image,
               "default_css": css_files
           }
+
+          if chapter_pages:
+              desc["chapter_pages"] = chapter_pages
 
           desc_path = os.path.join(target_dir, "description.json")
           with open(desc_path, "w", encoding="utf-8") as f:

@@ -55,11 +55,47 @@ def extract_toc_items_from_md(filepath):
     return items
 
 
-def split_markdown_into_chapters(work_dir):
+PAGE_MARKER_REGEX = re.compile(
+    r'(?:^|\r?\n)(?:'
+    r'(\d+)\r?\n-{5,}'  # Marker standard: 1\n------------------------------------------------
+    r'|<!--\s*(?:PAGE|PAGE_NUMBER)\s*[:=]?\s*(\d+)\s*-->'
+    r'|\[PAGE\s*(\d+)\]'
+    r'|---\r?\n+Page\s+(\d+)\r?\n+---'
+    r')(?:\r?\n|$)',
+    re.IGNORECASE
+)
+
+
+def parse_chapter_pages(pages_str):
+    if not pages_str:
+        return []
+    parts = re.split(r'[,\s]+', str(pages_str).strip())
+    pages = []
+    for p in parts:
+        if p.isdigit():
+            val = int(p)
+            if val > 0:
+                pages.append(val)
+    return sorted(list(set(pages)))
+
+
+def extract_title_from_md_string(content):
+    for line in content.splitlines():
+        line = line.strip()
+        m = re.match(r'^#{1,6}\s+(.+)$', line)
+        if m:
+            return re.sub(r'[*_`#]', '', m.group(1)).strip()
+    return None
+
+
+def split_markdown_into_chapters(work_dir, chapter_pages_str=None):
     """
-    Splits single markdown file in work_dir into separate chapter files by headings.
+    Splits single markdown file in work_dir into separate chapter files by page numbers or headings.
     Returns: [{"markdown": "chapter_00.md", "title": "...", "css": ""}, ...]
     """
+    if chapter_pages_str is None:
+        chapter_pages_str = os.getenv("CHAPTER_PAGES", "")
+
     md_files = [f for f in os.listdir(work_dir) if f.endswith(".md") and not f.startswith("chapter_") and not f.endswith(".bak")]
     if not md_files:
         md_files = [f for f in os.listdir(work_dir) if f.endswith(".md") and not f.endswith(".bak")]
@@ -80,7 +116,92 @@ def split_markdown_into_chapters(work_dir):
     with open(main_md_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    lines = content.splitlines()
+    target_pages = parse_chapter_pages(chapter_pages_str)
+    matches = list(PAGE_MARKER_REGEX.finditer(content))
+
+    if target_pages and matches:
+        pages_dict = {}
+        prev_end = 0
+        min_pnum = float('inf')
+        temp_pages = []
+
+        for m in matches:
+            p_num = int(m.group(1) or m.group(2) or m.group(3) or m.group(4))
+            min_pnum = min(min_pnum, p_num)
+            p_text = content[prev_end:m.start()]
+            temp_pages.append((p_num, p_text))
+            prev_end = m.end()
+
+        last_text = content[prev_end:]
+        if last_text.strip():
+            last_pnum = (temp_pages[-1][0] + 1) if temp_pages else 1
+            temp_pages.append((last_pnum, last_text))
+
+        offset = 1 if min_pnum == 0 else 0
+        for p_num, p_text in temp_pages:
+            actual_page = p_num + offset
+            clean_text = PAGE_MARKER_REGEX.sub('', p_text).strip()
+            if actual_page in pages_dict:
+                pages_dict[actual_page] += "\n\n" + clean_text
+            else:
+                pages_dict[actual_page] = clean_text
+
+        max_page = max(pages_dict.keys()) if pages_dict else 1
+
+        if target_pages[0] > 1:
+            chapter_starts = [1] + target_pages
+        else:
+            chapter_starts = target_pages
+
+        chapters = []
+        for idx in range(len(chapter_starts)):
+            start_p = chapter_starts[idx]
+            if idx + 1 < len(chapter_starts):
+                end_p = chapter_starts[idx + 1] - 1
+            else:
+                end_p = max_page
+
+            if start_p > max_page:
+                continue
+
+            sec_texts = []
+            for p in range(start_p, min(end_p, max_page) + 1):
+                if p in pages_dict and pages_dict[p]:
+                    sec_texts.append(pages_dict[p])
+
+            sec_content = "\n\n".join(sec_texts).strip()
+            if not sec_content:
+                continue
+
+            first_line = sec_content.splitlines()[0] if sec_content.splitlines() else ""
+            m_title = re.match(r'^#{1,6}\s+(.+)$', first_line)
+            if m_title:
+                title = re.sub(r'[*_`#]', '', m_title.group(1)).strip()
+            else:
+                md_title = extract_title_from_md_string(sec_content)
+                if md_title:
+                    title = md_title
+                else:
+                    if idx == 0 and chapter_starts[0] == 1 and target_pages[0] > 1:
+                        title = "Front Matter"
+                    else:
+                        chapter_num = idx if (chapter_starts[0] == 1 and target_pages[0] > 1) else (idx + 1)
+                        title = f"Chapter {chapter_num}"
+
+            chapter_filename = f"chapter_{idx:02d}.md"
+            chapter_filepath = os.path.join(work_dir, chapter_filename)
+            with open(chapter_filepath, "w", encoding="utf-8") as f:
+                f.write(sec_content + "\n")
+
+            chapters.append({"markdown": chapter_filename, "title": title, "css": ""})
+
+        if main_md_filename != "chapter_00.md" and os.path.exists(main_md_path):
+            os.rename(main_md_path, main_md_path + ".bak")
+
+        return chapters
+
+    clean_content = PAGE_MARKER_REGEX.sub('', content)
+    lines = clean_content.splitlines()
     h1_count = sum(1 for l in lines if re.match(r'^#\s+\S+', l))
     h2_count = sum(1 for l in lines if re.match(r'^##\s+\S+', l))
 
@@ -91,10 +212,13 @@ def split_markdown_into_chapters(work_dir):
     else:
         split_pattern = r'^(?=#{1,3}\s+\S+)'
 
-    raw_sections = re.split(split_pattern, content, flags=re.MULTILINE)
+    raw_sections = re.split(split_pattern, clean_content, flags=re.MULTILINE)
     sections = [s.strip() for s in raw_sections if s.strip()]
 
     if len(sections) <= 1:
+        if matches:
+            with open(main_md_path, "w", encoding="utf-8") as f:
+                f.write(clean_content)
         title = extract_title_from_md(main_md_path)
         return [{"markdown": main_md_filename, "title": title, "css": ""}]
 
@@ -110,7 +234,7 @@ def split_markdown_into_chapters(work_dir):
         chapter_filename = f"chapter_{idx:02d}.md"
         chapter_filepath = os.path.join(work_dir, chapter_filename)
         with open(chapter_filepath, "w", encoding="utf-8") as f:
-            f.write(sec)
+            f.write(sec + "\n")
 
         chapters.append({"markdown": chapter_filename, "title": title, "css": ""})
 
@@ -364,8 +488,9 @@ if __name__ == "__main__":
         json_data = {}
 
     chapters_info = json_data.get("chapters", [])
+    chapter_pages_val = json_data.get("chapter_pages") or os.getenv("CHAPTER_PAGES", "")
     if not chapters_info or len(chapters_info) <= 1:
-        split_chapters = split_markdown_into_chapters(work_dir)
+        split_chapters = split_markdown_into_chapters(work_dir, chapter_pages_str=chapter_pages_val)
         if split_chapters:
             chapters_info = split_chapters
             json_data["chapters"] = chapters_info
