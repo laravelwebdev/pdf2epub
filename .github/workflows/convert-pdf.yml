@@ -294,6 +294,18 @@ jobs:
                   print(f"ERROR: marker_single failed with code {res.returncode}")
                   sys.exit(res.returncode)
 
+          # Flatten subdirectories created inside output (e.g., ch_XX or document) into output/ root
+          sub_dirs = [d for d in glob.glob("output/*") if os.path.isdir(d) and os.path.basename(d) != "images"]
+          for sdir in sub_dirs:
+              for root, dirs, files in os.walk(sdir):
+                  for f in files:
+                      src = os.path.join(root, f)
+                      if f.endswith(".md") and not os.path.exists(os.path.join("output", f)):
+                          shutil.copy(src, os.path.join("output", f))
+                      elif f.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")):
+                          shutil.copy(src, os.path.join("output/images", f))
+              shutil.rmtree(sdir)
+
           print("======================================")
           print("Conversion completed")
           print("======================================")
@@ -322,8 +334,7 @@ jobs:
           author = os.getenv("BOOK_AUTHOR", "").strip() or "Unknown"
           chapter_pages = os.getenv("CHAPTER_PAGES", "").strip()
 
-          md_dirs = [d for d in glob.glob("output/*") if os.path.isdir(d)]
-          target_dir = md_dirs[0] if md_dirs else "output"
+          target_dir = "output"
 
           images_dir = os.path.join(target_dir, "images")
           css_dir = os.path.join(target_dir, "css")
@@ -351,10 +362,20 @@ jobs:
                           shutil.move(src_path, dest_path)
 
           # Update markdown image links to use images/ folder
+          def fix_image_link(match):
+              alt = match.group(1)
+              img_name = os.path.basename(match.group(2))
+              return f"![{alt}](images/{img_name})"
+
           for md_path in glob.glob(os.path.join(target_dir, "*.md")):
               with open(md_path, "r", encoding="utf-8") as f_md:
                   content = f_md.read()
-              new_content = re.sub(r'!\[\]\((\.?\/)?([^\/]+\.(?:png|jpg|jpeg|gif|webp|svg))\)', r'![](images/\2)', content)
+              new_content = re.sub(
+                  r'!\[(.*?)\]\((?:\.?\/)?(?:images\/)?([^\s\)\"]+\.(?:png|jpg|jpeg|gif|webp|svg))\)',
+                  fix_image_link,
+                  content,
+                  flags=re.IGNORECASE
+              )
               if new_content != content:
                   with open(md_path, "w", encoding="utf-8") as f_md:
                       f_md.write(new_content)
