@@ -164,21 +164,140 @@ jobs:
           TORCH_DEVICE: cpu
           CUDA_VISIBLE_DEVICES: ""
           HF_HUB_DISABLE_TELEMETRY: "1"
+          CHAPTER_PAGES: ${{ inputs.chapter_pages }}
         run: |
           echo "======================================"
           echo "CPU-only PDF conversion"
           echo "======================================"
 
-          marker_single \
-            input/document.pdf \
-            --output_dir output \
-            --output_format markdown \
-            --disable_ocr \
-            --paginate_output
+          python - << 'EOF'
+          import os
+          import re
+          import glob
+          import shutil
+          import subprocess
+          import sys
 
-          echo "======================================"
-          echo "Conversion completed"
-          echo "======================================"
+          chapter_pages_str = os.getenv("CHAPTER_PAGES", "").strip()
+
+          def parse_chapter_pages(pages_str):
+              if not pages_str:
+                  return []
+              parts = re.split(r'[,\s]+', str(pages_str).strip())
+              pages = []
+              for p in parts:
+                  if p.isdigit():
+                      val = int(p)
+                      if val > 0:
+                          pages.append(val)
+              return sorted(list(set(pages)))
+
+          target_pages = parse_chapter_pages(chapter_pages_str)
+          pdf_path = "input/document.pdf"
+
+          if target_pages:
+              print(f"Chapter pages specified: {target_pages}")
+              total_pages = 0
+              doc = None
+              reader = None
+
+              try:
+                  import fitz
+                  doc = fitz.open(pdf_path)
+                  total_pages = len(doc)
+              except Exception as e:
+                  print(f"PyMuPDF not available or failed ({e}), falling back to pypdf...")
+                  from pypdf import PdfReader, PdfWriter
+                  reader = PdfReader(pdf_path)
+                  total_pages = len(reader.pages)
+
+              print(f"Total PDF pages: {total_pages}")
+
+              if target_pages[0] > 1:
+                  chapter_starts = [1] + target_pages
+              else:
+                  chapter_starts = target_pages
+
+              ranges = []
+              for idx in range(len(chapter_starts)):
+                  start_p = chapter_starts[idx]
+                  if idx + 1 < len(chapter_starts):
+                      end_p = chapter_starts[idx + 1] - 1
+                  else:
+                      end_p = total_pages
+                  if start_p <= total_pages:
+                      ranges.append((idx, start_p, min(end_p, total_pages)))
+
+              os.makedirs("input/chapters", exist_ok=True)
+              os.makedirs("output", exist_ok=True)
+              os.makedirs("output/images", exist_ok=True)
+
+              for idx, start_p, end_p in ranges:
+                  ch_pdf = f"input/chapters/chapter_{idx:02d}.pdf"
+                  print(f"Creating {ch_pdf} for PDF pages {start_p} to {end_p}...")
+                  if doc is not None:
+                      new_doc = fitz.open()
+                      new_doc.insert_pdf(doc, from_page=start_p - 1, to_page=end_p - 1)
+                      new_doc.save(ch_pdf)
+                      new_doc.close()
+                  else:
+                      from pypdf import PdfWriter
+                      writer = PdfWriter()
+                      for p in range(start_p - 1, end_p):
+                          writer.add_page(reader.pages[p])
+                      with open(ch_pdf, "wb") as f_out:
+                          writer.write(f_out)
+
+                  ch_output_dir = f"output/ch_{idx:02d}"
+                  cmd = [
+                      "marker_single",
+                      ch_pdf,
+                      "--output_dir", ch_output_dir,
+                      "--output_format", "markdown",
+                      "--disable_ocr"
+                  ]
+                  print(f"Running: {' '.join(cmd)}")
+                  res = subprocess.run(cmd)
+                  if res.returncode != 0:
+                      print(f"ERROR: marker_single failed on {ch_pdf} with code {res.returncode}")
+                      sys.exit(res.returncode)
+
+                  sub_dirs = [d for d in glob.glob(f"{ch_output_dir}/*") if os.path.isdir(d)]
+                  sub_dir = sub_dirs[0] if sub_dirs else ch_output_dir
+
+                  md_files = glob.glob(os.path.join(sub_dir, "*.md"))
+                  if md_files:
+                      dest_md = f"output/chapter_{idx:02d}.md"
+                      shutil.copy(md_files[0], dest_md)
+                      print(f"Saved {dest_md}")
+
+                  for root, dirs, files in os.walk(sub_dir):
+                      for f in files:
+                          if f.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")):
+                              shutil.copy(os.path.join(root, f), os.path.join("output/images", f))
+
+              if doc is not None:
+                  doc.close()
+
+          else:
+              print("No chapter pages specified. Converting entire PDF at once...")
+              cmd = [
+                  "marker_single",
+                  pdf_path,
+                  "--output_dir", "output",
+                  "--output_format", "markdown",
+                  "--disable_ocr"
+              ]
+              print(f"Running: {' '.join(cmd)}")
+              res = subprocess.run(cmd)
+              if res.returncode != 0:
+                  print(f"ERROR: marker_single failed with code {res.returncode}")
+                  sys.exit(res.returncode)
+
+          print("======================================")
+          print("Conversion completed")
+          print("======================================")
+          EOF
 
       # ---------------------------------------------------------
       # Convert Markdown to EPUB using local mark2epub.py
