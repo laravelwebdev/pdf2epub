@@ -85,32 +85,25 @@ hr {
   margin: 2em 0;
 }
 
-/* Images & Figures (Centered) */
-p:has(> img),
-div:has(> img) {
-  text-align: center;
-  margin: 1.5em 0;
-}
-
+/* Images & Figures (Centered for all EPUB readers) */
+p img,
 img {
-  display: block;
-  margin-left: auto;
-  margin-right: auto;
-  margin-top: 1.2em;
-  margin-bottom: 1.2em;
-  max-width: 100%;
-  height: auto;
+  display: block !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  margin-top: 1.2em !important;
+  margin-bottom: 1.2em !important;
+  max-width: 100% !important;
+  height: auto !important;
   object-fit: contain;
   border-radius: 4px;
 }
 
+p:has(> img),
+div:has(> img),
 figure {
-  margin: 1.5em 0;
-  text-align: center;
-}
-
-figure img {
-  margin-bottom: 0.5em;
+  text-align: center !important;
+  margin: 1.5em auto !important;
 }
 
 figcaption {

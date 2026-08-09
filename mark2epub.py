@@ -294,6 +294,14 @@ def get_chapter_XML(md_filename, css_filenames, work_dir="."):
                                   extension_configs={"codehilite": {"guess_lang": False}}
                                   )
 
+    # Ensure paragraphs wrapping images have text-align: center for EPUB compatibility
+    html_text = re.sub(
+        r'<p>(<img[^>]+>)</p>',
+        r'<p style="text-align: center;">\1</p>',
+        html_text,
+        flags=re.IGNORECASE
+    )
+
     all_xhtml = """<?xml version="1.0" encoding="UTF-8"?>\n"""
     all_xhtml += """<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="en">\n"""
     all_xhtml += """<head>\n<meta http-equiv="default-style" content="text/html; charset=utf-8"/>\n"""
