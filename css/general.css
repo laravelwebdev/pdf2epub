@@ -1,35 +1,210 @@
+/* ==========================================================================
+   EPUB & Markdown Stylesheet
+   ========================================================================== */
+
+/* Base Typography & Layout */
 body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, Georgia, serif;
+  font-size: 1em;
+  line-height: 1.65;
+  color: #222222;
+  margin: 0 auto;
+  padding: 1.2em;
+  background-color: #ffffff;
+  text-align: justify;
+  text-justify: inter-word;
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #111111;
+  line-height: 1.3;
+  margin-top: 1.5em;
+  margin-bottom: 0.6em;
+  font-weight: 700;
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+h1 {
+  font-size: 1.8em;
+  text-align: center;
+  margin-top: 1.2em;
+  margin-bottom: 1em;
+  padding-bottom: 0.4em;
+  border-bottom: 2px solid #34495e;
+}
+
+h2 {
+  font-size: 1.4em;
+  margin-top: 1.4em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+h3 {
+  font-size: 1.2em;
+  color: #2c3e50;
+}
+
+h4 {
+  font-size: 1.1em;
+  color: #34495e;
+}
+
+/* Paragraphs & Text Formatting */
+p {
+  margin-top: 0;
+  margin-bottom: 1em;
+  line-height: 1.65;
+}
+
+strong, b {
+  font-weight: 700;
+  color: #111111;
+}
+
+em, i {
+  font-style: italic;
+}
+
+a {
+  color: #2980b9;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+hr {
+  border: 0;
+  height: 1px;
+  background: #e2e8f0;
+  margin: 2em 0;
+}
+
+/* Images & Figures (Centered) */
+p:has(> img),
+div:has(> img) {
+  text-align: center;
+  margin: 1.5em 0;
+}
+
+img {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: 1.2em;
+  margin-bottom: 1.2em;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+figure {
+  margin: 1.5em 0;
+  text-align: center;
+}
+
+figure img {
+  margin-bottom: 0.5em;
+}
+
+figcaption {
+  font-size: 0.85em;
+  color: #666666;
+  font-style: italic;
+  text-align: center;
+  margin-top: 0.4em;
+}
+
+/* Lists */
+ul, ol {
+  padding-left: 1.8em;
+  margin-top: 0;
+  margin-bottom: 1.2em;
+}
+
+li {
+  margin-bottom: 0.4em;
+  line-height: 1.6;
+}
+
+/* Blockquotes */
+blockquote {
+  margin: 1.5em 0;
+  padding: 0.8em 1.2em;
+  border-left: 4px solid #34495e;
+  background-color: #f8fafc;
+  color: #475569;
+  font-style: italic;
+  border-radius: 0 4px 4px 0;
+}
+
+blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* Code & Preformatted Text */
+code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+  font-size: 0.88em;
+  background-color: #f1f5f9;
+  color: #0f172a;
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+}
+
+pre {
+  background-color: #0f172a;
+  color: #f8fafc;
+  padding: 1.2em;
+  overflow-x: auto;
+  border-radius: 6px;
+  font-size: 0.9em;
+  line-height: 1.5;
+  margin: 1.5em 0;
+}
+
+pre code {
+  background-color: transparent;
+  color: inherit;
+  padding: 0;
   font-size: 1em;
 }
 
-
-img {
-  max-width: 100%;
-  height: auto;
-}
-
-
+/* Tables */
 table {
   border-collapse: collapse;
   width: 100%;
-  font-size: 1em;
+  margin: 1.5em 0;
+  font-size: 0.95em;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  overflow: hidden;
 }
 
-td,
+th, td {
+  border: 1px solid #cbd5e1;
+  padding: 10px 14px;
+  text-align: left;
+  vertical-align: top;
+}
+
 th {
-  border: 1px solid #ddd;
-  padding: 8px;
+  background-color: #34495e;
+  color: #ffffff;
+  font-weight: 600;
+  text-align: center;
 }
 
 tr:nth-child(even) {
-  background-color: #f2f2f2;
+  background-color: #f8fafc;
 }
 
-th {
-  padding-top: 12px;
-  padding-bottom: 12px;
-  text-align: left;
-  background-color: #444444;
-  color: white;
-  font-size: 1em;
+tr:hover {
+  background-color: #f1f5f9;
 }
