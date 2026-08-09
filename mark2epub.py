@@ -89,57 +89,20 @@ def split_markdown_into_chapters(work_dir, chapter_pages_str=None):
     if not md_files:
         return []
 
-    # If there are already multiple chapter files, use them
-    if len(md_files) > 1 and any(f.startswith("chapter_") for f in md_files):
+    # If there are chapter files created from chapter_pages input, use them
+    chapter_files = sorted([f for f in md_files if f.startswith("chapter_")])
+    if chapter_files:
         chapters = []
-        for md_file in sorted(md_files):
+        for md_file in chapter_files:
             title = extract_title_from_md(os.path.join(work_dir, md_file))
             chapters.append({"markdown": md_file, "title": title, "css": ""})
         return chapters
 
+    # Otherwise, do not split automatically. Use the single markdown file as is.
     main_md_filename = md_files[0]
     main_md_path = os.path.join(work_dir, main_md_filename)
-    with open(main_md_path, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    lines = content.splitlines()
-    h1_count = sum(1 for l in lines if re.match(r'^#\s+\S+', l))
-    h2_count = sum(1 for l in lines if re.match(r'^##\s+\S+', l))
-
-    if h1_count >= 1:
-        split_pattern = r'^(?=#\s+\S+)'
-    elif h2_count >= 1:
-        split_pattern = r'^(?=##\s+\S+)'
-    else:
-        split_pattern = r'^(?=#{1,3}\s+\S+)'
-
-    raw_sections = re.split(split_pattern, content, flags=re.MULTILINE)
-    sections = [s.strip() for s in raw_sections if s.strip()]
-
-    if len(sections) <= 1:
-        title = extract_title_from_md(main_md_path)
-        return [{"markdown": main_md_filename, "title": title, "css": ""}]
-
-    chapters = []
-    for idx, sec in enumerate(sections):
-        first_line = sec.splitlines()[0] if sec.splitlines() else ""
-        m = re.match(r'^#{1,6}\s+(.+)$', first_line)
-        if m:
-            title = re.sub(r'[*_`#]', '', m.group(1)).strip()
-        else:
-            title = "Front Matter" if idx == 0 else f"Chapter {idx}"
-
-        chapter_filename = f"chapter_{idx:02d}.md"
-        chapter_filepath = os.path.join(work_dir, chapter_filename)
-        with open(chapter_filepath, "w", encoding="utf-8") as f:
-            f.write(sec + "\n")
-
-        chapters.append({"markdown": chapter_filename, "title": title, "css": ""})
-
-    if main_md_filename != "chapter_00.md" and os.path.exists(main_md_path):
-        os.rename(main_md_path, main_md_path + ".bak")
-
-    return chapters
+    title = extract_title_from_md(main_md_path)
+    return [{"markdown": main_md_filename, "title": title, "css": ""}]
 
 
 def get_packageOPF_XML(md_filenames=[], image_filenames=[], css_filenames=[], description_data=None):
